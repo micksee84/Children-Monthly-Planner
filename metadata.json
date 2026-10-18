@@ -1,0 +1,6 @@
+{
+  "name": "My Week Planner - Sunshine Brigade",
+  "description": "Visual weekly routine planner for kids ages 3–5 by Sunshine Brigade. Drag and drop activity blocks onto a custom landscape grid and print on one Letter page.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,80 @@
+import React from 'react';
+import {
+  Sun,
+  Moon,
+  Sparkles,
+  BookOpen,
+  BookHeart,
+  Palette,
+  Music,
+  Music2,
+  Puzzle,
+  Boxes,
+  Shapes,
+  Bike,
+  Footprints,
+  Trees,
+  Smile,
+  Heart,
+  Star,
+  Apple,
+  Utensils,
+  UtensilsCrossed,
+  Bath,
+  Shirt,
+  GraduationCap,
+  CloudMoon,
+  Bed,
+  Droplets,
+  Archive,
+  Clock,
+  Compass,
+  Scissors,
+  Brush,
+  Check,
+  LucideProps,
+} from 'lucide-react';
+
+interface ActivityIconProps extends LucideProps {
+  name: string;
+}
+
+export const iconMap: Record<string, React.FC<LucideProps>> = {
+  Sun,
+  Moon,
+  Sparkles,
+  BookOpen,
+  BookHeart,
+  Palette,
+  Music,
+  Music2,
+  Puzzle,
+  Boxes,
+  Shapes,
+  Bike,
+  Footprints,
+  Trees,
+  Smile,
+  Heart,
+  Star,
+  Apple,
+  Utensils,
+  UtensilsCrossed,
+  Bath,
+  Shirt,
+  GraduationCap,
+  CloudMoon,
+  Bed,
+  Droplets,
+  Archive,
+  Clock,
+  Compass,
+  Scissors,
+  Brush,
+  Check,
+};
+
+export const ActivityIcon: React.FC<ActivityIconProps> = ({ name, ...props }) => {
+  const Component = iconMap[name] || Smile;
+  return <Component {...props} />;
+};
