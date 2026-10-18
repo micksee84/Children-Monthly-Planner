@@ -7,12 +7,14 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   DndContext,
   DragOverlay,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   pointerWithin,
+  CollisionDetection,
   DragStartEvent,
-  DragOverEvent,
+  DragMoveEvent,
   DragEndEvent,
 } from '@dnd-kit/core';
 import { domToCanvas } from 'modern-screenshot';
@@ -31,40 +33,43 @@ import {
   DAY_KEYS,
   DAY_NAMES_5,
   findNearestFreeSlot,
+  getDefaultWeekLabel,
   isRangeFree,
-  validateRowHeight,
+  remapBlocksToGrid,
 } from './utils/timeGrid';
 import {
   createNewPlan,
+  loadCustomItems,
   loadPlans,
   savePlans,
-  DEFAULT_SETTINGS,
+  saveCustomItems,
 } from './data/defaultData';
 
 import { Toolbar } from './components/Toolbar';
 import { Palette } from './components/Palette';
 import { RightSidebar } from './components/RightSidebar';
-import { ScheduleSheet, DropPreviewState } from './components/ScheduleSheet';
+import { ScheduleSheet, DropPreviewState, ROW_GAP_PX } from './components/ScheduleSheet';
 import { ActivityBlockCard } from './components/ActivityBlockCard';
 import { PrintPortal } from './components/PrintPortal';
 import { ToastContainer } from './components/Toast';
 
 export default function App() {
   // Load saved plans from localStorage (with safety try/catch inside data layer)
-  const [plans, setPlans] = useState<PlanRecord[]>(() => {
-    const loaded = loadPlans();
-    return loaded.plans;
-  });
-
-  const [activePlanId, setActivePlanId] = useState<string>(() => {
-    const loaded = loadPlans();
-    return loaded.activePlanId;
-  });
+  const [initialLoad] = useState(() => loadPlans());
+  const [plans, setPlans] = useState<PlanRecord[]>(initialLoad.plans);
+  const [activePlanId, setActivePlanId] = useState<string>(initialLoad.activePlanId);
 
   // Current active plan & its settings/blocks
   const activePlan = plans.find((p) => p.id === activePlanId) || plans[0];
   const settings = activePlan.settings;
   const blocks = activePlan.blocks;
+
+  // Latest values for callbacks that run later (toast Undo buttons, pointer
+  // handlers), so they never act on a stale snapshot.
+  const blocksRef = useRef(blocks);
+  blocksRef.current = blocks;
+  const activePlanIdRef = useRef(activePlanId);
+  activePlanIdRef.current = activePlanId;
 
   // Selected block for editing in the RightSidebar & resize handle
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
@@ -83,7 +88,11 @@ export default function App() {
   } | null>(null);
 
   const [dropPreview, setDropPreview] = useState<DropPreviewState | null>(null);
+  const dropPreviewRef = useRef<DropPreviewState | null>(null);
   const grabOffsetRef = useRef<number>(0);
+  // Set briefly after a drag ends so the click that follows the release does
+  // not clear the selection of the block that was just dropped.
+  const suppressDeselectRef = useRef(false);
 
   // Zoom control state
   const [zoom, setZoom] = useState<number>(1.0);
@@ -92,7 +101,7 @@ export default function App() {
   const printSheetRef = useRef<HTMLDivElement>(null);
 
   // Custom palette items created by the user
-  const [customItems, setCustomItems] = useState<PaletteItem[]>([]);
+  const [customItems, setCustomItems] = useState<PaletteItem[]>(() => loadCustomItems());
 
   // Toast notifications
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -100,11 +109,18 @@ export default function App() {
   // PDF generation state
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
-  // dnd-kit sensors: PointerSensor with 6px distance constraint so simple clicks still select
+  // dnd-kit sensors: mouse starts after 6px so simple clicks still select;
+  // touch starts after a short press so the palette and page can still scroll.
   const sensors = useSensors(
-    useSensor(PointerSensor, {
+    useSensor(MouseSensor, {
       activationConstraint: {
         distance: 6,
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 180,
+        tolerance: 8,
       },
     })
   );
@@ -143,14 +159,41 @@ export default function App() {
   // Update current blocks with history tracking
   const commitBlocksChange = useCallback(
     (newBlocks: ActivityBlock[]) => {
-      setHistory((prev) => [...prev.slice(-40), blocks]);
+      const before = blocksRef.current;
+      setHistory((prev) => [...prev.slice(-40), before]);
       setFuture([]);
       updateActivePlan((prev) => ({
         ...prev,
         blocks: newBlocks,
       }));
     },
-    [blocks, updateActivePlan]
+    [updateActivePlan]
+  );
+
+  // Put removed blocks back (toast "Undo"). Works on the schedule as it is
+  // now, so anything added in the meantime is kept; a block whose spot was
+  // taken since slides to the nearest free rows on the same day.
+  const restoreBlocks = useCallback(
+    (planId: string, removed: ActivityBlock[], rows: number) => {
+      if (activePlanIdRef.current !== planId) return;
+      const current = blocksRef.current;
+      const next = [...current];
+      let skipped = 0;
+      for (const b of removed) {
+        if (next.some((n) => n.id === b.id)) continue;
+        const row = findNearestFreeSlot(b.day, b.startRow, b.durationRows, next, rows, null);
+        if (row === null) {
+          skipped++;
+          continue;
+        }
+        next.push({ ...b, startRow: row });
+      }
+      if (next.length !== current.length) commitBlocksChange(next);
+      if (skipped > 0) {
+        addToast(`${skipped} ${skipped === 1 ? 'block' : 'blocks'} could not be put back because the day is full.`);
+      }
+    },
+    [commitBlocksChange, addToast]
   );
 
   // Undo / Redo implementation
@@ -228,6 +271,8 @@ export default function App() {
   // Handle #print hash (e.g. when opened in a new tab from iframe)
   useEffect(() => {
     if (typeof window !== 'undefined' && window.location.hash === '#print') {
+      // Clear the hash so a refresh of this tab does not print again.
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
       document.fonts.ready.then(() => {
         setTimeout(() => {
           window.print();
@@ -238,13 +283,48 @@ export default function App() {
 
   // Update planner settings
   const handleUpdateSettings = (newSettings: Partial<PlannerSettings>) => {
-    updateActivePlan((prev) => ({
-      ...prev,
-      settings: {
-        ...prev.settings,
-        ...newSettings,
-      },
-    }));
+    const next: PlannerSettings = { ...settings, ...newSettings };
+
+    // Switching 5/7 days: keep an untouched automatic week label in step.
+    if (next.daysMode !== settings.daysMode && settings.weekLabel === getDefaultWeekLabel(settings.daysMode)) {
+      next.weekLabel = getDefaultWeekLabel(next.daysMode);
+    }
+
+    const gridChanged =
+      next.startHour !== settings.startHour ||
+      next.endHour !== settings.endHour ||
+      next.stepMinutes !== settings.stepMinutes;
+
+    if (!gridChanged || blocks.length === 0) {
+      updateActivePlan((prev) => ({ ...prev, settings: next }));
+      return;
+    }
+
+    // Blocks are stored as rows, so re-place them by clock time on the new grid.
+    const previousSettings = settings;
+    const previousBlocks = blocks;
+    const planId = activePlanId;
+    const { blocks: remapped, dropped } = remapBlocksToGrid(blocks, settings, next);
+
+    updateActivePlan((prev) => ({ ...prev, settings: next, blocks: remapped }));
+    // Older undo steps are in the old row layout, so they no longer apply.
+    setHistory([]);
+    setFuture([]);
+    setSelectedBlockId(null);
+
+    if (dropped.length > 0) {
+      addToast(
+        `${dropped.length} ${dropped.length === 1 ? 'block is' : 'blocks are'} outside the new hours and ${
+          dropped.length === 1 ? 'was' : 'were'
+        } removed.`,
+        'Undo',
+        () => {
+          if (activePlanIdRef.current !== planId) return;
+          updateActivePlan((prev) => ({ ...prev, settings: previousSettings, blocks: previousBlocks }));
+        },
+        8000
+      );
+    }
   };
 
   // Switch between saved plans
@@ -285,6 +365,8 @@ export default function App() {
     setPlans(nextPlans);
     setActivePlanId(dup.id);
     setSelectedBlockId(null);
+    setHistory([]);
+    setFuture([]);
     savePlans(nextPlans, dup.id);
     addToast(`Duplicated "${activePlan.name}".`);
   };
@@ -294,9 +376,15 @@ export default function App() {
     if (plans.length <= 1) return;
     const filtered = plans.filter((p) => p.id !== planId);
     setPlans(filtered);
-    const nextActive = filtered[0].id;
+    // Stay on the current plan unless it is the one being deleted.
+    const deletingActive = planId === activePlanId;
+    const nextActive = deletingActive ? filtered[0].id : activePlanId;
     setActivePlanId(nextActive);
-    setSelectedBlockId(null);
+    if (deletingActive) {
+      setSelectedBlockId(null);
+      setHistory([]);
+      setFuture([]);
+    }
     savePlans(filtered, nextActive);
     addToast('Plan deleted.');
   };
@@ -313,10 +401,12 @@ export default function App() {
   const handleClearAllBlocks = () => {
     if (blocks.length === 0) return;
     const saved = [...blocks];
+    const planId = activePlanId;
+    const rows = totalRows;
     commitBlocksChange([]);
     setSelectedBlockId(null);
     addToast('All blocks cleared from schedule.', 'Undo', () => {
-      commitBlocksChange(saved);
+      restoreBlocks(planId, saved, rows);
     });
   };
 
@@ -339,9 +429,44 @@ export default function App() {
   // DND-KIT HANDLERS
   // =========================================================================
 
+  // Prefer the day column under the pointer; otherwise the sheet itself, so a
+  // drop over a gap or the header is never treated as "off the page".
+  const collisionDetection: CollisionDetection = useCallback((args) => {
+    const hits = pointerWithin(args);
+    const dayHit = hits.find((h) => String(h.id).startsWith('day|'));
+    if (dayHit) return [dayHit];
+    return hits.filter((h) => h.id === 'sheet');
+  }, []);
+
+  const setPreview = (next: DropPreviewState | null) => {
+    const prev = dropPreviewRef.current;
+    const same =
+      prev === next ||
+      (prev &&
+        next &&
+        prev.day === next.day &&
+        prev.startRow === next.startRow &&
+        prev.durationRows === next.durationRows &&
+        prev.fits === next.fits);
+    if (same) return;
+    dropPreviewRef.current = next;
+    setDropPreview(next);
+  };
+
+  const getPointerY = (event: Event | null): number | null => {
+    if (!event) return null;
+    if ('touches' in event) {
+      const t = (event as TouchEvent).touches[0] || (event as TouchEvent).changedTouches[0];
+      return t ? t.clientY : null;
+    }
+    if ('clientY' in event) return (event as MouseEvent).clientY;
+    return null;
+  };
+
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
     const isPalette = !!active.data.current?.isPaletteItem;
+    dropPreviewRef.current = null;
 
     if (isPalette) {
       const paletteItem = active.data.current?.paletteItem as PaletteItem;
@@ -363,23 +488,32 @@ export default function App() {
     }
   };
 
-  const handleDragOver = (event: DragOverEvent) => {
-    const { over, active } = event;
+  const handleDragMove = (event: DragMoveEvent) => {
+    const { over, active, delta, activatorEvent } = event;
 
     if (!over) {
-      setDropPreview(null);
+      // Outside the sheet entirely.
+      setPreview(null);
       return;
     }
 
     const overId = String(over.id);
-    if (!overId.startsWith('cell|')) {
-      setDropPreview(null);
+    if (!overId.startsWith('day|')) {
+      // Over the sheet but between columns or on the header: keep the last
+      // landing spot so crossing a gap does not lose it.
       return;
     }
 
-    const [, dayStr, rowStr] = overId.split('|');
-    const day = dayStr as DayKey;
-    const hoveredRow = parseInt(rowStr, 10);
+    const startY = getPointerY(activatorEvent);
+    if (startY === null) return;
+    const pointerY = startY + delta.y;
+
+    const day = over.data.current?.day as DayKey;
+    const rect = over.rect;
+    // Rows are equal with a fixed gap: column = n*row + (n-1)*gap (all scaled by zoom).
+    const gap = ROW_GAP_PX * zoom;
+    const rowStep = (rect.height + gap) / totalRows;
+    const hoveredRow = Math.max(0, Math.min(totalRows - 1, Math.floor((pointerY - rect.top) / rowStep)));
 
     const isPalette = !!active.data.current?.isPaletteItem;
     let desiredDurationRows = 1;
@@ -394,82 +528,68 @@ export default function App() {
       desiredDurationRows = block?.durationRows || 1;
       excludeId = block?.id || null;
     }
+    desiredDurationRows = Math.min(desiredDurationRows, totalRows);
 
-    // Offset row: grabbing a 3-hour block by bottom does not shift it
+    // Offset row: grabbing a 3-hour block by its bottom does not shift it
     const grabOffset = isPalette ? 0 : grabOffsetRef.current || 0;
-    const targetStartRow = hoveredRow - grabOffset;
+    const targetStartRow = Math.max(0, Math.min(totalRows - desiredDurationRows, hoveredRow - grabOffset));
 
     // Search outward for free spot in this column
-    let landingRow = findNearestFreeSlot(
-      day,
-      targetStartRow,
-      desiredDurationRows,
-      blocks,
-      totalRows,
-      excludeId
-    );
+    let landingRow = findNearestFreeSlot(day, targetStartRow, desiredDurationRows, blocks, totalRows, excludeId);
 
-    // If palette item won't fit at default duration, try 1-row block
+    // If a palette item won't fit at its default length, try a 1-row block
     if (landingRow === null && isPalette && desiredDurationRows > 1) {
       desiredDurationRows = 1;
-      landingRow = findNearestFreeSlot(
-        day,
-        targetStartRow,
-        1,
-        blocks,
-        totalRows,
-        excludeId
-      );
+      landingRow = findNearestFreeSlot(day, hoveredRow, 1, blocks, totalRows, excludeId);
     }
 
     if (landingRow !== null) {
-      setDropPreview({
-        day,
-        startRow: landingRow,
-        durationRows: desiredDurationRows,
-        fits: true,
-      });
+      setPreview({ day, startRow: landingRow, durationRows: desiredDurationRows, fits: true });
     } else {
-      // Won't fit anywhere in that day column
-      setDropPreview({
-        day,
-        startRow: Math.max(0, Math.min(totalRows - 1, hoveredRow)),
-        durationRows: 1,
-        fits: false,
-      });
+      setPreview({ day, startRow: hoveredRow, durationRows: 1, fits: false });
     }
+  };
+
+  const finishDrag = () => {
+    setActiveDragItem(null);
+    dropPreviewRef.current = null;
+    setDropPreview(null);
+    suppressDeselectRef.current = true;
+    setTimeout(() => {
+      suppressDeselectRef.current = false;
+    }, 0);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { over, active } = event;
-    const currentPreview = dropPreview;
-
-    setActiveDragItem(null);
-    setDropPreview(null);
+    const currentPreview = dropPreviewRef.current;
+    finishDrag();
 
     const isPalette = !!active.data.current?.isPaletteItem;
     const activeBlock = active.data.current?.block as ActivityBlock | undefined;
 
-    // Case 1: Dropped off the page (over is null)
+    // Case 1: Let go outside the sheet. A block dragged off the page is removed
+    // (with Undo); a palette item simply is not added.
     if (!over) {
       if (!isPalette && activeBlock) {
-        // Dragging a block off the page deletes it, with a toast "Block removed" and an Undo button (5 seconds)
         const removedBlock = activeBlock;
-        const newBlocks = blocks.filter((b) => b.id !== removedBlock.id);
-        commitBlocksChange(newBlocks);
+        const planId = activePlanId;
+        const rows = totalRows;
+        commitBlocksChange(blocks.filter((b) => b.id !== removedBlock.id));
         if (selectedBlockId === removedBlock.id) {
           setSelectedBlockId(null);
         }
-
         addToast('Block removed', 'Undo', () => {
-          commitBlocksChange([...newBlocks, removedBlock]);
+          restoreBlocks(planId, [removedBlock], rows);
         });
       }
       return;
     }
 
-    // Case 2: Dropped onto a cell
-    if (!currentPreview || !currentPreview.fits) {
+    // Case 2: Over the sheet but never over a day column: nothing to do.
+    if (!currentPreview) return;
+
+    if (!currentPreview.fits) {
       addToast('No room there. Try another spot.');
       return;
     }
@@ -487,26 +607,41 @@ export default function App() {
         category: paletteItem.category,
       };
 
-      const newBlocks = [...blocks, newBlock];
-      commitBlocksChange(newBlocks);
+      commitBlocksChange([...blocks, newBlock]);
       setSelectedBlockId(newBlock.id);
     } else if (activeBlock) {
+      const current = blocks.find((b) => b.id === activeBlock.id);
+      if (!current) return;
+      if (
+        current.day === currentPreview.day &&
+        current.startRow === currentPreview.startRow &&
+        current.durationRows === currentPreview.durationRows
+      ) {
+        // Dropped where it already was: no undo step needed.
+        setSelectedBlockId(current.id);
+        return;
+      }
       const updatedBlock: ActivityBlock = {
-        ...activeBlock,
+        ...current,
         day: currentPreview.day,
         startRow: currentPreview.startRow,
         durationRows: currentPreview.durationRows,
       };
 
-      const newBlocks = blocks.map((b) => (b.id === activeBlock.id ? updatedBlock : b));
-      commitBlocksChange(newBlocks);
+      commitBlocksChange(blocks.map((b) => (b.id === current.id ? updatedBlock : b)));
       setSelectedBlockId(updatedBlock.id);
     }
   };
 
   const handleDragCancel = () => {
-    setActiveDragItem(null);
-    setDropPreview(null);
+    finishDrag();
+  };
+
+  // Clicking empty canvas clears the selection, except for the click that
+  // the browser fires right after a drag is released.
+  const handleBackgroundDeselect = () => {
+    if (suppressDeselectRef.current) return;
+    setSelectedBlockId(null);
   };
 
   // =========================================================================
@@ -567,65 +702,70 @@ export default function App() {
     e.preventDefault();
     e.stopPropagation();
 
-    // Measure row step in screen pixels: gridElement.getBoundingClientRect().height / rows
-    const gridEl = document.getElementById('schedule-grid-container');
-    if (!gridEl) return;
+    // Measure one row step in screen pixels from the block's own day column
+    // (already scaled by zoom): column = n*row + (n-1)*gap.
+    const columnEl = sheetGridRef.current?.querySelector<HTMLElement>(
+      `[data-day-column="${targetBlock.day}"]`
+    );
+    if (!columnEl) return;
 
-    const gridRect = gridEl.getBoundingClientRect();
-    const rowStepPx = gridRect.height / totalRows;
+    const columnRect = columnEl.getBoundingClientRect();
+    const rowStepPx = (columnRect.height + ROW_GAP_PX * zoom) / totalRows;
     const startY = e.clientY;
     const initialDuration = targetBlock.durationRows;
+    const blocksBefore = blocksRef.current;
+    const planId = activePlanId;
 
-    // Find next block in this day to stop at
-    const otherBlocksInDay = blocks.filter(
-      (b) => b.day === targetBlock.day && b.id !== targetBlock.id && b.startRow > targetBlock.startRow
-    );
-    const sorted = [...otherBlocksInDay].sort((a, b) => a.startRow - b.startRow);
-    const nextBlock = sorted[0];
+    // Stop at the next block in this day
+    const nextBlock = blocksBefore
+      .filter((b) => b.day === targetBlock.day && b.id !== targetBlock.id && b.startRow > targetBlock.startRow)
+      .sort((a, b) => a.startRow - b.startRow)[0];
     const maxAllowedRows = nextBlock
       ? nextBlock.startRow - targetBlock.startRow
       : totalRows - targetBlock.startRow;
 
     let currentDuration = initialDuration;
 
-    const onPointerMove = (ev: PointerEvent) => {
-      const deltaY = ev.clientY - startY;
-      const rowDelta = Math.round(deltaY / rowStepPx);
-      const newDuration = Math.max(1, Math.min(maxAllowedRows, initialDuration + rowDelta));
+    const setDuration = (durationRows: number) => {
+      setPlans((prev) =>
+        prev.map((p) =>
+          p.id === planId
+            ? { ...p, blocks: p.blocks.map((b) => (b.id === targetBlock.id ? { ...b, durationRows } : b)) }
+            : p
+        )
+      );
+    };
 
+    const onPointerMove = (ev: PointerEvent) => {
+      const rowDelta = Math.round((ev.clientY - startY) / rowStepPx);
+      const newDuration = Math.max(1, Math.min(maxAllowedRows, initialDuration + rowDelta));
       if (newDuration !== currentDuration) {
         currentDuration = newDuration;
-        // Live visual update
-        setPlans((prev) =>
-          prev.map((p) => {
-            if (p.id === activePlanId) {
-              return {
-                ...p,
-                blocks: p.blocks.map((b) =>
-                  b.id === targetBlock.id ? { ...b, durationRows: newDuration } : b
-                ),
-              };
-            }
-            return p;
-          })
-        );
+        setDuration(newDuration); // live visual update, saved on release
       }
     };
 
     const onPointerUp = () => {
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
 
-      // Save as ONE undo step on release
-      if (currentDuration !== initialDuration) {
-        setHistory((prev) => [...prev.slice(-40), blocks]);
-        setFuture([]);
-        savePlans(plans, activePlanId);
-      }
+      if (currentDuration === initialDuration) return;
+
+      // One undo step per resize, and save the resized plan (not the copy
+      // from before the resize started).
+      setHistory((prev) => [...prev.slice(-40), blocksBefore]);
+      setFuture([]);
+      setPlans((prev) => {
+        const next = prev.map((p) => (p.id === planId ? { ...p, updatedAt: Date.now() } : p));
+        savePlans(next, planId);
+        return next;
+      });
     };
 
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
   };
 
   // =========================================================================
@@ -640,10 +780,12 @@ export default function App() {
     const blockToDelete = blocks.find((b) => b.id === blockId);
     if (!blockToDelete) return;
     const newBlocks = blocks.filter((b) => b.id !== blockId);
+    const planId = activePlanId;
+    const rows = totalRows;
     commitBlocksChange(newBlocks);
     setSelectedBlockId(null);
     addToast('Block removed', 'Undo', () => {
-      commitBlocksChange([...newBlocks, blockToDelete]);
+      restoreBlocks(planId, [blockToDelete], rows);
     });
   };
 
@@ -742,11 +884,12 @@ export default function App() {
   };
 
   return (
+    <>
     <DndContext
       sensors={sensors}
-      collisionDetection={pointerWithin}
+      collisionDetection={collisionDetection}
       onDragStart={handleDragStart}
-      onDragOver={handleDragOver}
+      onDragMove={handleDragMove}
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
@@ -784,14 +927,20 @@ export default function App() {
             onSelectCharacter={(charId) => handleUpdateSettings({ selectedCharacter: charId })}
             onTapAddBlock={handleTapAddBlock}
             customItems={customItems}
-            onAddCustomItem={(item) => setCustomItems((prev) => [...prev, item])}
+            onAddCustomItem={(item) =>
+              setCustomItems((prev) => {
+                const next = [...prev, item];
+                saveCustomItems(next);
+                return next;
+              })
+            }
           />
 
           {/* Centre Canvas with Zoom Control */}
           <main
             ref={viewportContainerRef}
             className="flex-1 h-full bg-[#EAE6DD] overflow-auto flex items-center justify-center p-6 relative select-none scrollbar-thin"
-            onClick={() => setSelectedBlockId(null)}
+            onClick={handleBackgroundDeselect}
           >
             {/* Page scaled via CSS transform */}
             <div
@@ -809,7 +958,7 @@ export default function App() {
                 readOnly={false}
                 dropPreview={dropPreview}
                 draggingBlockId={activeDragItem?.isPaletteItem ? null : activeDragItem?.id}
-                onSelectBlock={setSelectedBlockId}
+                onSelectBlock={(id) => (id === null ? handleBackgroundDeselect() : setSelectedBlockId(id))}
                 onUpdateSettings={handleUpdateSettings}
                 onGrabRowOffset={(offset) => {
                   grabOffsetRef.current = offset;
@@ -853,13 +1002,23 @@ export default function App() {
         <DragOverlay dropAnimation={null}>
           {activeDragItem ? (
             activeDragItem.isPaletteItem && activeDragItem.paletteItem ? (
-              <div className="w-48 bg-white border-2 border-[#2D2200] rounded-xl px-3 py-2 flex items-center gap-2 shadow-[4px_4px_0px_#2D2200] cursor-grabbing select-none pointer-events-none">
+              <div className="w-full bg-white border-2 border-[#2D2200] rounded-xl px-3 py-2 flex items-center gap-2 shadow-[4px_4px_0px_#2D2200] cursor-grabbing select-none pointer-events-none">
                 <span className="font-bold text-xs text-[#2D2200] truncate">
                   {activeDragItem.paletteItem.title}
                 </span>
               </div>
             ) : activeDragItem.block ? (
-              <div className="w-40 pointer-events-none select-none">
+              // The overlay box is the block's on-screen (zoomed) size; draw the
+              // card at page size and scale it to match, like the sheet itself.
+              <div
+                className="pointer-events-none select-none"
+                style={{
+                  width: `${100 / zoom}%`,
+                  height: `${100 / zoom}%`,
+                  transform: `scale(${zoom})`,
+                  transformOrigin: 'top left',
+                }}
+              >
                 <ActivityBlockCard
                   block={activeDragItem.block}
                   isOverlay={true}
@@ -873,19 +1032,18 @@ export default function App() {
         </DragOverlay>
 
         {/* =========================================================
-            PRINT PORTAL (Rendered into document.body outside DndContext)
-        ========================================================= */}
-        <PrintPortal
-          settings={settings}
-          blocks={blocks}
-          printRef={printSheetRef}
-        />
-
-        {/* =========================================================
             TOAST CONTAINER
         ========================================================= */}
         <ToastContainer toasts={toasts} onDismiss={dismissToast} />
       </div>
     </DndContext>
+
+    {/* =========================================================
+        PRINT PORTAL: rendered OUTSIDE DndContext on purpose. Inside it, the
+        hidden print copy re-registered every drop target and block id as
+        disabled, which stopped all dropping.
+    ========================================================= */}
+    <PrintPortal settings={settings} blocks={blocks} printRef={printSheetRef} />
+    </>
   );
 }

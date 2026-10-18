@@ -194,6 +194,35 @@ export function loadPlans(): { plans: PlanRecord[]; activePlanId: string } {
   };
 }
 
+const CUSTOM_ITEMS_KEY = 'sb_my_week_custom_items_v1';
+
+/**
+ * Load the user's own palette activities (wrapped safely in try/catch)
+ */
+export function loadCustomItems(): PaletteItem[] {
+  try {
+    const raw = localStorage.getItem(CUSTOM_ITEMS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (err) {
+    console.warn('Could not read custom activities from localStorage:', err);
+  }
+  return [];
+}
+
+/**
+ * Save the user's own palette activities (wrapped safely in try/catch)
+ */
+export function saveCustomItems(items: PaletteItem[]): void {
+  try {
+    localStorage.setItem(CUSTOM_ITEMS_KEY, JSON.stringify(items));
+  } catch (err) {
+    console.warn('Could not save custom activities to localStorage:', err);
+  }
+}
+
 /**
  * Save plans to localStorage (wrapped safely in try/catch)
  */

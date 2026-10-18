@@ -17,6 +17,8 @@ interface ActivityBlockCardProps {
   onSelect?: (blockId: string) => void;
   onGrabRowOffset?: (offsetRow: number) => void;
   onStartResize?: (e: React.PointerEvent, block: ActivityBlock) => void;
+  /** Height of one grid row in page pixels; short rows get a tighter one-row layout. */
+  rowHeightPx?: number;
 }
 
 export const ActivityBlockCard: React.FC<ActivityBlockCardProps> = ({
@@ -32,10 +34,11 @@ export const ActivityBlockCard: React.FC<ActivityBlockCardProps> = ({
   onSelect,
   onGrabRowOffset,
   onStartResize,
+  rowHeightPx,
 }) => {
   const cardRef = useRef<HTMLDivElement>(null);
 
-  const { attributes, listeners, setNodeRef, transform } = useDraggable({
+  const { attributes, listeners, setNodeRef } = useDraggable({
     id: block.id,
     disabled: readOnly || isOverlay,
     data: {
@@ -59,6 +62,17 @@ export const ActivityBlockCard: React.FC<ActivityBlockCardProps> = ({
 
   const timeClass = is7DayView ? 'text-[10px] font-semibold' : 'text-[11px] font-semibold';
 
+  // One-row blocks are only as tall as a row (about 40px at 1-hour rows), so
+  // they use tight padding and line heights. If a row is too short for two
+  // lines (e.g. 30-minute rows), the time is left off; it stays in the tooltip.
+  // Approximate block height in page pixels (rows plus the 4px gaps between them).
+  const blockHeight =
+    rowHeightPx === undefined ? Infinity : rowHeightPx * block.durationRows + 4 * (block.durationRows - 1);
+  const tightRow = isOneRow || blockHeight < 56;
+  const showTimeLine = showTimes && blockHeight >= 34;
+  const wrapTitle = blockHeight >= 78;
+  const paddingClass = tightRow ? 'px-2 py-[3px] justify-center' : 'p-2 justify-between';
+
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (readOnly || isOverlay) return;
 
@@ -79,12 +93,12 @@ export const ActivityBlockCard: React.FC<ActivityBlockCardProps> = ({
     onSelect?.(block.id);
   };
 
-  // Dragging transform style
+  // The original block stays in place (faded) while dragging; the DragOverlay
+  // in App is the copy that follows the pointer.
   const style: React.CSSProperties = {
     gridRow: isOverlay ? undefined : `${block.startRow + 1} / span ${block.durationRows}`,
     gridColumn: isOverlay ? undefined : 1,
     opacity: isDragging ? 0.2 : 1,
-    transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
   };
 
   return (
@@ -101,7 +115,7 @@ export const ActivityBlockCard: React.FC<ActivityBlockCardProps> = ({
         listeners?.onPointerDown?.(e);
       }}
       onClick={handleClick}
-      className={`relative w-full h-full bg-white border-2 border-[#2D2200] rounded-[12px] p-2 flex flex-col justify-between overflow-visible transition-shadow select-none group ${
+      className={`relative w-full h-full min-w-0 min-h-0 bg-white border-2 border-[#2D2200] rounded-[12px] ${paddingClass} flex flex-col overflow-visible transition-shadow select-none group ${
         isOverlay ? 'shadow-[4px_4px_0px_#2D2200] z-50 cursor-grabbing' : 'cursor-grab'
       } ${
         isSelected && !readOnly
@@ -110,9 +124,9 @@ export const ActivityBlockCard: React.FC<ActivityBlockCardProps> = ({
       }`}
     >
       {/* Content wrapper */}
-      <div className="flex items-start gap-1.5 w-full min-w-0">
+      <div className={`flex gap-1.5 w-full min-w-0 ${tightRow ? 'items-center' : 'items-start'}`} title={`${block.title} · ${timeString}`}>
         {/* Icon */}
-        <div className="shrink-0 mt-0.5 text-[#2D2200]">
+        <div className={`shrink-0 text-[#2D2200] ${tightRow ? '' : 'mt-0.5'}`}>
           <ActivityIcon
             name={block.icon}
             size={is7DayView ? (isOneRow ? 14 : 16) : isOneRow ? 16 : 18}
@@ -121,13 +135,17 @@ export const ActivityBlockCard: React.FC<ActivityBlockCardProps> = ({
         </div>
 
         {/* Text info */}
-        <div className="min-w-0 flex-1 leading-tight">
-          <div className={`${titleClass} text-[#2D2200] truncate`} title={block.title}>
+        <div className={`min-w-0 flex-1 ${tightRow ? 'leading-[1.15]' : 'leading-tight'}`}>
+          <div className={`${titleClass} text-[#2D2200] ${wrapTitle ? 'line-clamp-2 break-words' : 'truncate'}`}>
             {block.title}
           </div>
 
-          {showTimes && (
-            <div className={`${timeClass} text-[#2D2200]/80 tracking-tight mt-0.5 whitespace-nowrap`}>
+          {showTimeLine && (
+            <div
+              className={`${timeClass} text-[#2D2200]/80 tracking-tight whitespace-nowrap truncate ${
+                tightRow ? 'leading-[1.1]' : 'mt-0.5'
+              }`}
+            >
               {timeString}
             </div>
           )}
@@ -136,7 +154,7 @@ export const ActivityBlockCard: React.FC<ActivityBlockCardProps> = ({
         {/* Optional tick circle */}
         {block.hasCheckCircle && (
           <div
-            className={`shrink-0 rounded-full border-[1.5px] border-[#2D2200] bg-white self-start mt-0.5 ${
+            className={`shrink-0 rounded-full border-[1.5px] border-[#2D2200] bg-white ${tightRow ? 'self-center' : 'self-start mt-0.5'} ${
               is7DayView ? 'w-3.5 h-3.5' : 'w-4 h-4'
             }`}
             title="Tick circle when completed"
@@ -153,7 +171,7 @@ export const ActivityBlockCard: React.FC<ActivityBlockCardProps> = ({
             e.preventDefault();
             onStartResize(e, block);
           }}
-          className="absolute left-1/2 -translate-x-1/2 w-[48px] h-[14px] bg-[#2D2200] rounded-full cursor-ns-resize z-30 flex items-center justify-center shadow-[1px_1px_0px_#2D2200] hover:scale-105 active:scale-95 transition-transform"
+          className="absolute left-1/2 -translate-x-1/2 w-[48px] h-[14px] bg-[#2D2200] rounded-full cursor-ns-resize touch-none z-30 flex items-center justify-center shadow-[1px_1px_0px_#2D2200] hover:scale-105 active:scale-95 transition-transform"
           style={{
             top: 'calc(100% - 2px)',
           }}

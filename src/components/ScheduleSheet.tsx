@@ -1,6 +1,7 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
+import { useDroppable } from '@dnd-kit/core';
 import { ActivityBlock, DayKey, PlannerSettings } from '../types/planner';
-import { computeTotalRows, DAY_KEYS, DAY_NAMES_5, DAY_NAMES_7 } from '../utils/timeGrid';
+import { computeTotalRows, DAY_KEYS, DAY_NAMES_5, DAY_NAMES_7, estimateRowHeight } from '../utils/timeGrid';
 import { GridCell } from './GridCell';
 import { ActivityBlockCard } from './ActivityBlockCard';
 import { CharacterSticker } from './CharacterSticker';
@@ -26,6 +27,44 @@ interface ScheduleSheetProps {
   onCharacterClick?: () => void;
   gridRef?: React.RefObject<HTMLDivElement | null>;
 }
+
+/** Vertical gap between rows inside a day column, in unscaled page pixels. */
+export const ROW_GAP_PX = 4;
+
+interface DayColumnProps {
+  day: DayKey;
+  totalRows: number;
+  readOnly: boolean;
+  children: React.ReactNode;
+}
+
+/**
+ * One day column. The whole column is a single drop target; App works out
+ * which row the pointer is over from the column's measured rectangle.
+ */
+const DayColumn: React.FC<DayColumnProps> = ({ day, totalRows, readOnly, children }) => {
+  const { setNodeRef } = useDroppable({
+    id: `day|${day}`,
+    disabled: readOnly,
+    data: { day },
+  });
+
+  return (
+    <div
+      ref={readOnly ? undefined : setNodeRef}
+      data-day-column={readOnly ? undefined : day}
+      className="w-full h-full min-w-0 min-h-0 relative grid"
+      style={{
+        // Fixed tracks: blocks fit the rows instead of stretching them.
+        gridTemplateColumns: 'minmax(0, 1fr)',
+        gridTemplateRows: `repeat(${totalRows}, minmax(0, 1fr))`,
+        gap: `${ROW_GAP_PX}px`,
+      }}
+    >
+      {children}
+    </div>
+  );
+};
 
 export const ScheduleSheet = React.forwardRef<HTMLDivElement, ScheduleSheetProps>(
   (
@@ -55,6 +94,13 @@ export const ScheduleSheet = React.forwardRef<HTMLDivElement, ScheduleSheetProps
     const [editingName, setEditingName] = useState(false);
     const [tempName, setTempName] = useState(settings.childName);
 
+    // The whole sheet is a drop target too, so letting go over a gap, the
+    // header or the margins never counts as "dropped off the page".
+    const { setNodeRef: setSheetDropRef } = useDroppable({
+      id: 'sheet',
+      disabled: readOnly,
+    });
+
     const totalRows = computeTotalRows(settings.startHour, settings.endHour, settings.stepMinutes);
     const is7Day = settings.daysMode === '7day';
     const visibleDays: DayKey[] = is7Day ? DAY_KEYS : DAY_KEYS.slice(0, 5);
@@ -79,8 +125,12 @@ export const ScheduleSheet = React.forwardRef<HTMLDivElement, ScheduleSheetProps
 
     return (
       <div
-        ref={ref}
-        id="schedule-page-letter"
+        ref={(node) => {
+          if (!readOnly) setSheetDropRef(node);
+          if (typeof ref === 'function') ref(node);
+          else if (ref) ref.current = node;
+        }}
+        id={readOnly ? undefined : 'schedule-page-letter'}
         className="w-[1056px] h-[816px] min-w-[1056px] min-h-[816px] max-w-[1056px] max-h-[816px] bg-white text-[#2D2200] pt-[32px] px-[48px] pb-[28px] box-border relative flex flex-col justify-between overflow-hidden shadow-2xl rounded-[16px] select-none"
         onClick={() => {
           if (!readOnly) onSelectBlock?.(null);
@@ -255,27 +305,22 @@ export const ScheduleSheet = React.forwardRef<HTMLDivElement, ScheduleSheetProps
           {/* Grid Area: Day columns sharing the exact same row count and gap */}
           <div
             ref={gridRef}
-            id="schedule-grid-container"
+            id={readOnly ? undefined : 'schedule-grid-container'}
             className="w-full flex-1 grid gap-2.5 pt-2 min-h-0 relative"
             style={{
               gridTemplateColumns: `repeat(${visibleDays.length}, minmax(0, 1fr))`,
+              // One row that fills the frame, so day columns get a fixed height.
+              gridTemplateRows: 'minmax(0, 1fr)',
             }}
           >
             {visibleDays.map((day) => {
               const dayBlocks = blocks.filter((b) => b.day === day);
 
               return (
-                <div
-                  key={day}
-                  className="w-full h-full relative grid"
-                  style={{
-                    gridTemplateRows: `repeat(${totalRows}, minmax(0, 1fr))`,
-                    gap: '4px',
-                  }}
-                >
+                <DayColumn key={day} day={day} totalRows={totalRows} readOnly={readOnly}>
                   {/* Faint empty guide boxes (1.5px dashed #B6B2A6 border, radius 10px) */}
                   {Array.from({ length: totalRows }).map((_, r) => (
-                    <GridCell key={r} day={day} row={r} readOnly={readOnly} />
+                    <GridCell key={r} row={r} />
                   ))}
 
                   {/* Placed Activity Blocks */}
@@ -293,6 +338,7 @@ export const ScheduleSheet = React.forwardRef<HTMLDivElement, ScheduleSheetProps
                       onSelect={(id) => onSelectBlock?.(id)}
                       onGrabRowOffset={onGrabRowOffset}
                       onStartResize={onStartResize}
+                      rowHeightPx={estimateRowHeight(totalRows)}
                     />
                   ))}
 
@@ -315,7 +361,7 @@ export const ScheduleSheet = React.forwardRef<HTMLDivElement, ScheduleSheetProps
                       {!dropPreview.fits && <span>No room here</span>}
                     </div>
                   )}
-                </div>
+                </DayColumn>
               );
             })}
           </div>
