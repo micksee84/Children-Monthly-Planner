@@ -164,7 +164,7 @@ export const ScheduleSheet = React.forwardRef<HTMLDivElement, ScheduleSheetProps
                   if (e.key === 'Enter') saveTitle();
                   if (e.key === 'Escape') setEditingTitle(false);
                 }}
-                className="text-center font-joyful text-[38px] font-black text-[#2D2200] border-b-2 border-[#2D2200] bg-transparent outline-none max-w-sm"
+                className="text-center font-joyful text-[38px] font-normal text-[#2D2200] border-b-2 border-[#2D2200] bg-transparent outline-none max-w-sm"
               />
             ) : (
               <h1

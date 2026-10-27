@@ -60,6 +60,20 @@ body {
     .085em .085em 0 #2D2200;
 }
 
+/* Ink die-cut: Super Joyful screen headers (24-36px). Ink letters, a white ring at
+   3.2% and a flat ink shadow at about 7%, per the Ink Style guide. */
+.ink-die-cut {
+  font-family: var(--font-joyful);
+  font-weight: 400;
+  line-height: 1.1;
+  padding-right: 0.1em;
+  color: #2D2200;
+  text-shadow:
+    .032em 0 0 #FFFFFF, -.032em 0 0 #FFFFFF, 0 .032em 0 #FFFFFF, 0 -.032em 0 #FFFFFF,
+    .023em .023em 0 #FFFFFF, -.023em .023em 0 #FFFFFF, .023em -.023em 0 #FFFFFF, -.023em -.023em 0 #FFFFFF,
+    .07em .07em 0 #2D2200, .09em .07em 0 #2D2200, .07em .09em 0 #2D2200, .09em .09em 0 #2D2200;
+}
+
 /* Print styling exact specifications */
 .print-root {
   display: none;

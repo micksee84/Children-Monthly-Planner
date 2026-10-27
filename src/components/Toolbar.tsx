@@ -53,7 +53,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     <header className="w-full h-14 bg-white border-b-2 border-[#2D2200] px-4 flex items-center justify-between gap-4 shrink-0 select-none z-30">
       {/* Zone 1: Brand & Plan Selector */}
       <div className="flex items-center gap-3 shrink-0">
-        <div className="flex items-center gap-2">
+        <h1 className="m-0 flex items-center gap-3 font-normal">
           <picture className="shrink-0">
             <source media="(min-width: 640px)" srcSet={`${import.meta.env.BASE_URL}sb-logo-header.svg`} />
             <img
@@ -64,10 +64,12 @@ export const Toolbar: React.FC<ToolbarProps> = ({
               loading="eager"
             />
           </picture>
-          <span className="font-extrabold text-sm text-[#2D2200] hidden sm:inline tracking-tight">
-            My Week Planner
+          <span className="hidden lg:block w-[1.5px] h-6 bg-[#2D2200]/20" aria-hidden="true" />
+          {/* App name: Super Joyful ink die-cut (screen header, never under 24px) */}
+          <span className="hidden lg:block ink-die-cut text-[24px] whitespace-nowrap select-none">
+            My week planner
           </span>
-        </div>
+        </h1>
 
         <div className="h-5 w-[1.5px] bg-[#2D2200]/20" />
 

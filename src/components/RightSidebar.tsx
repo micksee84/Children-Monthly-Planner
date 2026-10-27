@@ -634,7 +634,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
           COPY TO DAYS MODAL
       ========================================================= */}
       {copyModalOpen && selectedBlock && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-[#2D2200]/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white border-2 border-[#2D2200] rounded-2xl p-5 max-w-sm w-full shadow-[5px_5px_0px_#2D2200] animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between pb-3 border-b border-[#2D2200]/20">
               <h3 className="font-extrabold text-sm text-[#2D2200] flex items-center gap-1.5">
