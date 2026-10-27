@@ -54,9 +54,16 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       {/* Zone 1: Brand & Plan Selector */}
       <div className="flex items-center gap-3 shrink-0">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-[#F2B800] border-2 border-[#2D2200] flex items-center justify-center font-black text-xs text-[#2D2200] shadow-[1.5px_1.5px_0px_#2D2200]">
-            SB
-          </div>
+          <picture className="shrink-0">
+            <source media="(min-width: 640px)" srcSet={`${import.meta.env.BASE_URL}sb-logo-header.svg`} />
+            <img
+              src={`${import.meta.env.BASE_URL}sb-logo-icon.svg`}
+              alt="Sunshine Brigade"
+              draggable={false}
+              className="h-7 w-auto select-none"
+              loading="eager"
+            />
+          </picture>
           <span className="font-extrabold text-sm text-[#2D2200] hidden sm:inline tracking-tight">
             My Week Planner
           </span>
