@@ -1,4 +1,4 @@
-import { CharacterItem, PaletteItem, PlannerSettings, PlanRecord } from '../types/planner';
+import { ActivityBlock, CharacterItem, DayKey, PaletteItem, PlannerSettings, PlanRecord } from '../types/planner';
 import { getDefaultWeekLabel } from '../utils/timeGrid';
 
 export const CHARACTERS: CharacterItem[] = [
@@ -164,6 +164,51 @@ export function createNewPlan(name = 'My Weekly Routine'): PlanRecord {
   };
 }
 
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  typeof v === 'object' && v !== null && !Array.isArray(v);
+
+const DAYS: DayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+
+/**
+ * Check a plan read back from this browser before using it, as the worksheet builder
+ * does. Settings that are missing or the wrong type fall back to the defaults, and
+ * blocks that cannot be placed are dropped, so an old or damaged save opens instead of
+ * crashing the planner. Returns null when there is nothing to recover.
+ */
+function sanitizePlan(raw: unknown): PlanRecord | null {
+  if (!isRecord(raw) || typeof raw.id !== 'string' || !raw.id) return null;
+  const fresh = createNewPlan();
+  const savedSettings = isRecord(raw.settings) ? raw.settings : {};
+  const settings = { ...fresh.settings } as Record<string, unknown>;
+  for (const key of Object.keys(fresh.settings) as (keyof PlannerSettings)[]) {
+    const value = savedSettings[key];
+    const expected = fresh.settings[key];
+    if (key === 'selectedCharacter') {
+      if (value === null || typeof value === 'string') settings[key] = value;
+    } else if (value !== undefined && typeof value === typeof expected) {
+      settings[key] = value;
+    }
+  }
+  const blocks = Array.isArray(raw.blocks)
+    ? raw.blocks.filter(
+        (b): b is ActivityBlock =>
+          isRecord(b) &&
+          typeof b.id === 'string' &&
+          DAYS.includes(b.day as DayKey) &&
+          Number.isFinite(b.startRow) &&
+          Number.isFinite(b.durationRows) &&
+          (b.durationRows as number) >= 1
+      )
+    : [];
+  return {
+    id: raw.id,
+    name: typeof raw.name === 'string' ? raw.name : fresh.name,
+    updatedAt: typeof raw.updatedAt === 'number' ? raw.updatedAt : Date.now(),
+    settings: settings as unknown as PlannerSettings,
+    blocks,
+  };
+}
+
 /**
  * Load all saved plans from localStorage (wrapped safely in try/catch)
  */
@@ -172,12 +217,15 @@ export function loadPlans(): { plans: PlanRecord[]; activePlanId: string } {
     const raw = localStorage.getItem(STORAGE_KEY);
     const activeId = localStorage.getItem(ACTIVE_PLAN_KEY);
     if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        const found = parsed.find((p) => p.id === activeId);
+      const parsed: unknown = JSON.parse(raw);
+      const plans = Array.isArray(parsed)
+        ? parsed.map(sanitizePlan).filter((p): p is PlanRecord => p !== null)
+        : [];
+      if (plans.length > 0) {
+        const found = plans.find((p) => p.id === activeId);
         return {
-          plans: parsed,
-          activePlanId: found ? found.id : parsed[0].id,
+          plans,
+          activePlanId: found ? found.id : plans[0].id,
         };
       }
     }

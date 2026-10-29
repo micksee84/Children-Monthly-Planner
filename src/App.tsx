@@ -233,7 +233,10 @@ export default function App() {
         return;
       }
 
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+      if (e.key === 'Escape') {
+        // Escape closes the block settings by deselecting, like clicking the page
+        setSelectedBlockId(null);
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         if (e.shiftKey) {
           handleRedo();
@@ -893,7 +896,7 @@ export default function App() {
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
-      <div className="w-screen h-screen flex flex-col bg-[#F6F4EE] text-[#2D2200] overflow-hidden">
+      <div className="w-screen h-screen flex flex-col bg-[#F2F2E2] text-[#2D2200] overflow-hidden">
         {/* =========================================================
             TOP TOOLBAR
         ========================================================= */}
@@ -939,7 +942,7 @@ export default function App() {
           {/* Centre Canvas with Zoom Control */}
           <main
             ref={viewportContainerRef}
-            className="flex-1 h-full bg-[#EAE6DD] overflow-auto flex items-center justify-center p-6 relative select-none scrollbar-thin"
+            className="flex-1 h-full bg-[#EAE6D6] overflow-auto flex items-center justify-center p-6 relative select-none scrollbar-thin"
             onClick={handleBackgroundDeselect}
           >
             {/* Page scaled via CSS transform */}

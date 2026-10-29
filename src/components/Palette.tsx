@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
+import { useDismiss } from '../utils/useDismiss';
 import { useDraggable } from '@dnd-kit/core';
 import { PaletteItem, CharacterItem } from '../types/planner';
 import { DEFAULT_PALETTE_ITEMS, CHARACTERS, AVAILABLE_ICONS } from '../data/defaultData';
@@ -39,6 +40,9 @@ export const Palette: React.FC<PaletteProps> = ({
 
   // Custom block creation modal state
   const [showAddCustomModal, setShowAddCustomModal] = useState(false);
+  // Close the dialog by clicking outside it or pressing Escape, as well as with the X.
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDismiss(dialogRef, showAddCustomModal, () => setShowAddCustomModal(false));
   const [customTitle, setCustomTitle] = useState('');
   const [customDuration, setCustomDuration] = useState<number>(30);
   const [customCategory, setCustomCategory] = useState<PaletteItem['category']>('Custom');
@@ -76,8 +80,8 @@ export const Palette: React.FC<PaletteProps> = ({
   return (
     <div className="w-80 h-full bg-white border-r-2 border-[#2D2200] flex flex-col shrink-0 select-none overflow-hidden">
       {/* Top Header / Mode Switcher */}
-      <div className="p-3.5 border-b-2 border-[#2D2200] bg-[#FAF8F5]">
-        <div className="flex bg-[#EFECE6] p-1 rounded-full border border-[#2D2200]/30 shadow-inner">
+      <div className="p-3.5 border-b-2 border-[#2D2200] bg-[#FAF8F0]">
+        <div className="flex bg-[#F2F2E2] p-1 rounded-full border border-[#2D2200]/30 shadow-inner">
           <button
             type="button"
             onClick={() => setActiveTab('activities')}
@@ -115,7 +119,7 @@ export const Palette: React.FC<PaletteProps> = ({
                 placeholder="Search activities..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-1.5 text-xs font-semibold bg-[#FAF8F5] border-[1.5px] border-[#2D2200]/40 rounded-full focus:outline-none focus:border-[#2D2200] transition-colors"
+                className="w-full pl-9 pr-3 py-1.5 text-xs font-semibold bg-[#FAF8F0] border-[1.5px] border-[#2D2200]/40 rounded-full focus:outline-none focus:border-[#2D2200] transition-colors"
               />
               {searchQuery && (
                 <button
@@ -139,7 +143,7 @@ export const Palette: React.FC<PaletteProps> = ({
                 className={`px-2.5 py-1 text-[11px] font-bold rounded-full whitespace-nowrap transition-all ${
                   selectedCategory === cat
                     ? 'bg-[#2D2200] text-white'
-                    : 'bg-[#F2EFE9] text-[#2D2200]/80 hover:bg-[#E5E1D8]'
+                    : 'bg-[#FAF8F0] text-[#2D2200]/80 hover:bg-[#F2F2E2]'
                 }`}
               >
                 {cat}
@@ -149,7 +153,7 @@ export const Palette: React.FC<PaletteProps> = ({
 
           {/* Notice when grid is completely full */}
           {isFull && (
-            <div className="mx-3 mt-2 px-3 py-1.5 bg-[#EE7B22]/15 border border-[#EE7B22] rounded-xl text-[11px] font-bold text-[#2D2200] flex items-center gap-1.5">
+            <div className="mx-3 mt-2 px-3 py-1.5 bg-[#E52311]/10 border border-[#E52311] rounded-xl text-[11px] font-bold text-[#2D2200] flex items-center gap-1.5">
               <span>All schedule spaces are filled!</span>
             </div>
           )}
@@ -199,7 +203,7 @@ export const Palette: React.FC<PaletteProps> = ({
               onClick={() => onSelectCharacter(null)}
               className={`p-2.5 rounded-2xl border-[1.5px] flex items-center gap-3 transition-all ${
                 selectedCharacter === null
-                  ? 'border-[#2D2200] bg-[#FAF8F5] shadow-[2.5px_2.5px_0px_#2D2200]'
+                  ? 'border-[#2D2200] bg-[#FAF8F0] shadow-[2.5px_2.5px_0px_#2D2200]'
                   : 'border-[#B6B2A6] bg-white hover:border-[#2D2200]/60'
               }`}
             >
@@ -248,15 +252,15 @@ export const Palette: React.FC<PaletteProps> = ({
       {/* CUSTOM BLOCK MODAL */}
       {showAddCustomModal && (
         <div className="fixed inset-0 bg-[#2D2200]/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white border-2 border-[#2D2200] rounded-2xl p-5 max-w-sm w-full shadow-[5px_5px_0px_#2D2200] animate-in fade-in zoom-in-95 duration-150">
+          <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Add your own activity" className="bg-white border-2 border-[#2D2200] rounded-2xl p-5 max-w-sm w-full shadow-[5px_5px_0px_#2D2200] animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between pb-3 border-b border-[#2D2200]/20">
               <h3 className="font-extrabold text-sm text-[#2D2200] flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4 text-[#EE7B22]" /> Add Custom Activity
+                <Sparkles className="w-4 h-4 text-[#2D2200]" /> Add Custom Activity
               </h3>
               <button
                 type="button"
                 onClick={() => setShowAddCustomModal(false)}
-                className="p-1 rounded-full hover:bg-slate-100 text-[#2D2200]"
+                className="p-1 rounded-full hover:bg-[#F2F2E2] text-[#2D2200]"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -327,7 +331,7 @@ export const Palette: React.FC<PaletteProps> = ({
                       className={`p-1.5 rounded-lg flex items-center justify-center transition-colors ${
                         customIcon === iconName
                           ? 'bg-[#2D2200] text-white'
-                          : 'hover:bg-[#FAF8F5] text-[#2D2200]'
+                          : 'hover:bg-[#FAF8F0] text-[#2D2200]'
                       }`}
                     >
                       <ActivityIcon name={iconName} size={15} />
@@ -353,7 +357,7 @@ export const Palette: React.FC<PaletteProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowAddCustomModal(false)}
-                  className="px-3 py-1.5 text-xs font-bold rounded-full border border-[#B6B2A6] text-[#2D2200] hover:bg-slate-100"
+                  className="px-3 py-1.5 text-xs font-bold rounded-full border border-[#B6B2A6] text-[#2D2200] hover:bg-[#F2F2E2]"
                 >
                   Cancel
                 </button>

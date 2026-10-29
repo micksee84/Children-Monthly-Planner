@@ -43,7 +43,7 @@ const ToastItem: React.FC<ToastItemProps> = ({ toast, onDismiss }) => {
             toast.onAction?.();
             onDismiss(toast.id);
           }}
-          className="px-2.5 py-0.5 rounded-full bg-white text-[#2D2200] text-xs font-extrabold hover:bg-[#FAF8F5] active:scale-95 transition-all flex items-center gap-1"
+          className="px-2.5 py-0.5 rounded-full bg-white text-[#2D2200] text-xs font-extrabold hover:bg-[#FAF8F0] active:scale-95 transition-all flex items-center gap-1"
         >
           <Undo2 className="w-3 h-3" />
           {toast.actionLabel}

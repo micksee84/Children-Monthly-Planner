@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
+import { useDismiss } from '../utils/useDismiss';
 import { ActivityBlock, DayKey, PlannerSettings, PlanRecord } from '../types/planner';
 import {
   computeTotalRows,
@@ -64,6 +65,9 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
   onClearAllBlocks,
 }) => {
   const [copyModalOpen, setCopyModalOpen] = useState(false);
+  // Close the dialog by clicking outside it or pressing Escape, as well as with the X.
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDismiss(dialogRef, copyModalOpen, () => setCopyModalOpen(false));
   const [selectedCopyDays, setSelectedCopyDays] = useState<Record<DayKey, boolean>>({
     mon: false,
     tue: false,
@@ -152,7 +156,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
       {selectedBlock ? (
         <div className="flex-1 flex flex-col min-h-0">
           {/* Header */}
-          <div className="p-3.5 border-b-2 border-[#2D2200] bg-[#FAF8F5] flex items-center justify-between">
+          <div className="p-3.5 border-b-2 border-[#2D2200] bg-[#FAF8F0] flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-[#2D2200]" />
               <h3 className="font-extrabold text-xs uppercase tracking-wider text-[#2D2200]">
@@ -162,7 +166,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
             <button
               type="button"
               onClick={onDeselectBlock}
-              className="p-1 rounded-full text-[#2D2200]/60 hover:text-[#2D2200] hover:bg-[#EFECE6]"
+              className="p-1 rounded-full text-[#2D2200]/60 hover:text-[#2D2200] hover:bg-[#F2F2E2]"
               title="Close block settings"
             >
               <X className="w-4 h-4" />
@@ -261,7 +265,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
             </div>
 
             {/* Time range preview */}
-            <div className="px-3 py-2 bg-[#FAF8F5] border border-[#B6B2A6] rounded-xl flex items-center justify-between text-xs font-bold text-[#2D2200]">
+            <div className="px-3 py-2 bg-[#FAF8F0] border border-[#B6B2A6] rounded-xl flex items-center justify-between text-xs font-bold text-[#2D2200]">
               <span className="flex items-center gap-1.5 text-[#2D2200]/70">
                 <Clock className="w-3.5 h-3.5" /> Time span:
               </span>
@@ -277,9 +281,9 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
 
             {/* Check Circle Toggle */}
             <div className="pt-1">
-              <label className="flex items-center justify-between p-2.5 border-[1.5px] border-[#2D2200] rounded-xl bg-white cursor-pointer hover:bg-[#FAF8F5]">
+              <label className="flex items-center justify-between p-2.5 border-[1.5px] border-[#2D2200] rounded-xl bg-white cursor-pointer hover:bg-[#FAF8F0]">
                 <span className="text-xs font-bold text-[#2D2200] flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-[#5BAE3C]" /> Show tick circle
+                  <CheckCircle className="w-4 h-4 text-[#2D2200]" /> Show tick circle
                 </span>
                 <input
                   type="checkbox"
@@ -314,7 +318,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                     className={`p-2 rounded-lg flex items-center justify-center transition-all ${
                       selectedBlock.icon === iconName
                         ? 'bg-[#2D2200] text-white shadow-[1.5px_1.5px_0px_#2D2200]'
-                        : 'hover:bg-[#FAF8F5] text-[#2D2200]'
+                        : 'hover:bg-[#FAF8F0] text-[#2D2200]'
                     }`}
                   >
                     <ActivityIcon name={iconName} size={16} />
@@ -328,7 +332,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
               <button
                 type="button"
                 onClick={handleOpenCopy}
-                className="w-full py-2 px-3 text-xs font-extrabold rounded-full bg-[#FAF8F5] border-2 border-[#2D2200] text-[#2D2200] shadow-[2px_2px_0px_#2D2200] hover:bg-[#EFECE6] active:translate-y-0.5 flex items-center justify-center gap-2 transition-all"
+                className="w-full py-2 px-3 text-xs font-extrabold rounded-full bg-[#FAF8F0] border-2 border-[#2D2200] text-[#2D2200] shadow-[2px_2px_0px_#2D2200] hover:bg-[#F2F2E2] active:translate-y-0.5 flex items-center justify-center gap-2 transition-all"
               >
                 <Copy className="w-3.5 h-3.5" /> Copy to other days...
               </button>
@@ -351,7 +355,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
             CASE 2: NO BLOCK SELECTED -> PAGE & SCHEDULE SETTINGS
         ========================================================= */
         <div className="flex-1 flex flex-col min-h-0">
-          <div className="p-3.5 border-b-2 border-[#2D2200] bg-[#FAF8F5] flex items-center gap-2">
+          <div className="p-3.5 border-b-2 border-[#2D2200] bg-[#FAF8F0] flex items-center gap-2">
             <Sliders className="w-4 h-4 text-[#2D2200]" />
             <h3 className="font-extrabold text-xs uppercase tracking-wider text-[#2D2200]">
               Schedule Settings
@@ -364,7 +368,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
               <label className="block text-xs font-extrabold text-[#2D2200] mb-1.5">
                 Week Days
               </label>
-              <div className="grid grid-cols-2 gap-1.5 p-1 bg-[#EFECE6] border border-[#2D2200]/30 rounded-full">
+              <div className="grid grid-cols-2 gap-1.5 p-1 bg-[#F2F2E2] border border-[#2D2200]/30 rounded-full">
                 <button
                   type="button"
                   onClick={() => onUpdateSettings({ daysMode: '5day' })}
@@ -456,7 +460,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                     }
                     className={`py-1.5 text-xs font-bold rounded-xl border-2 transition-all ${
                       settings.stepMinutes === 60
-                        ? 'border-[#2D2200] bg-[#FAF8F5] shadow-[2px_2px_0px_#2D2200] text-[#2D2200]'
+                        ? 'border-[#2D2200] bg-[#FAF8F0] shadow-[2px_2px_0px_#2D2200] text-[#2D2200]'
                         : 'border-[#B6B2A6] text-[#2D2200]/70 hover:border-[#2D2200]'
                     }`}
                   >
@@ -469,7 +473,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                     }
                     className={`py-1.5 text-xs font-bold rounded-xl border-2 transition-all ${
                       settings.stepMinutes === 30
-                        ? 'border-[#2D2200] bg-[#FAF8F5] shadow-[2px_2px_0px_#2D2200] text-[#2D2200]'
+                        ? 'border-[#2D2200] bg-[#FAF8F0] shadow-[2px_2px_0px_#2D2200] text-[#2D2200]'
                         : 'border-[#B6B2A6] text-[#2D2200]/70 hover:border-[#2D2200]'
                     }`}
                   >
@@ -489,7 +493,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
 
             {/* Show times on blocks toggle */}
             <div className="pt-1">
-              <label className="flex items-center justify-between p-2.5 border-[1.5px] border-[#2D2200] rounded-xl bg-white cursor-pointer hover:bg-[#FAF8F5]">
+              <label className="flex items-center justify-between p-2.5 border-[1.5px] border-[#2D2200] rounded-xl bg-white cursor-pointer hover:bg-[#FAF8F0]">
                 <span className="text-xs font-bold text-[#2D2200]">
                   Show times on blocks
                 </span>
@@ -588,7 +592,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                   type="text"
                   value={activePlan.name}
                   onChange={(e) => onRenamePlan(e.target.value)}
-                  className="w-full px-3 py-1.5 text-xs font-bold border-2 border-[#2D2200] rounded-xl outline-none bg-[#FAF8F5]"
+                  className="w-full px-3 py-1.5 text-xs font-bold border-2 border-[#2D2200] rounded-xl outline-none bg-[#FAF8F0]"
                   title="Rename current plan"
                 />
               </div>
@@ -597,7 +601,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                 <button
                   type="button"
                   onClick={onDuplicatePlan}
-                  className="py-1.5 px-2 text-xs font-bold rounded-xl border border-[#2D2200] bg-white hover:bg-[#FAF8F5] flex items-center justify-center gap-1 text-[#2D2200]"
+                  className="py-1.5 px-2 text-xs font-bold rounded-xl border border-[#2D2200] bg-white hover:bg-[#FAF8F0] flex items-center justify-center gap-1 text-[#2D2200]"
                 >
                   <Files className="w-3.5 h-3.5" /> Duplicate
                 </button>
@@ -635,7 +639,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
       ========================================================= */}
       {copyModalOpen && selectedBlock && (
         <div className="fixed inset-0 bg-[#2D2200]/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white border-2 border-[#2D2200] rounded-2xl p-5 max-w-sm w-full shadow-[5px_5px_0px_#2D2200] animate-in fade-in zoom-in-95 duration-150">
+          <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Copy to other days" className="bg-white border-2 border-[#2D2200] rounded-2xl p-5 max-w-sm w-full shadow-[5px_5px_0px_#2D2200] animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between pb-3 border-b border-[#2D2200]/20">
               <h3 className="font-extrabold text-sm text-[#2D2200] flex items-center gap-1.5">
                 <Copy className="w-4 h-4" /> Copy "{selectedBlock.title}"
@@ -643,7 +647,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
               <button
                 type="button"
                 onClick={() => setCopyModalOpen(false)}
-                className="p-1 rounded-full hover:bg-slate-100 text-[#2D2200]"
+                className="p-1 rounded-full hover:bg-[#F2F2E2] text-[#2D2200]"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -659,21 +663,21 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                 <button
                   type="button"
                   onClick={() => handleSelectPreset('weekdays')}
-                  className="px-2.5 py-1 text-xs font-bold rounded-full bg-[#FAF8F5] border border-[#2D2200] hover:bg-[#EFECE6] text-[#2D2200]"
+                  className="px-2.5 py-1 text-xs font-bold rounded-full bg-[#FAF8F0] border border-[#2D2200] hover:bg-[#F2F2E2] text-[#2D2200]"
                 >
                   Weekdays
                 </button>
                 <button
                   type="button"
                   onClick={() => handleSelectPreset('weekend')}
-                  className="px-2.5 py-1 text-xs font-bold rounded-full bg-[#FAF8F5] border border-[#2D2200] hover:bg-[#EFECE6] text-[#2D2200]"
+                  className="px-2.5 py-1 text-xs font-bold rounded-full bg-[#FAF8F0] border border-[#2D2200] hover:bg-[#F2F2E2] text-[#2D2200]"
                 >
                   Weekend
                 </button>
                 <button
                   type="button"
                   onClick={() => handleSelectPreset('all')}
-                  className="px-2.5 py-1 text-xs font-bold rounded-full bg-[#FAF8F5] border border-[#2D2200] hover:bg-[#EFECE6] text-[#2D2200]"
+                  className="px-2.5 py-1 text-xs font-bold rounded-full bg-[#FAF8F0] border border-[#2D2200] hover:bg-[#F2F2E2] text-[#2D2200]"
                 >
                   Every day
                 </button>
@@ -689,7 +693,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                       className={`flex items-center gap-2 p-2 rounded-xl border text-xs font-bold ${
                         isCurrentDay
                           ? 'opacity-40 cursor-not-allowed border-dashed border-[#B6B2A6]'
-                          : 'cursor-pointer hover:bg-[#FAF8F5] border-[#2D2200]'
+                          : 'cursor-pointer hover:bg-[#FAF8F0] border-[#2D2200]'
                       }`}
                     >
                       <input
@@ -716,7 +720,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                 <button
                   type="button"
                   onClick={() => setCopyModalOpen(false)}
-                  className="px-3.5 py-1.5 text-xs font-bold rounded-full border border-[#B6B2A6] text-[#2D2200] hover:bg-slate-100"
+                  className="px-3.5 py-1.5 text-xs font-bold rounded-full border border-[#B6B2A6] text-[#2D2200] hover:bg-[#F2F2E2]"
                 >
                   Cancel
                 </button>

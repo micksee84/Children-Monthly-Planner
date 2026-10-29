@@ -368,13 +368,12 @@ export const ScheduleSheet = React.forwardRef<HTMLDivElement, ScheduleSheetProps
         </div>
 
         {/* =====================================================
-            3. FOOTER: 1.5PX RULE, TAGLINE & CREDITS
+            3. FOOTER: 1.5PX RULE, THEN THE TAGLINE
+            Matches the worksheet builder's shorter footer. A planner is always
+            one page, so there is no page number.
         ===================================================== */}
-        <div className="w-full pt-1.5 border-t-[1.5px] border-[#2D2200] flex items-center justify-between text-[#2D2200] shrink-0 text-xs">
-          <div className="font-extrabold tracking-wide text-[12px]">Learn. Wonder. Shine.</div>
-          <div className="font-semibold text-[11px] text-[#2D2200]/90">
-            sunshinebrigade.ca · Free for home and classroom use
-          </div>
+        <div className="w-full pt-1.5 border-t-[1.5px] border-[#2D2200] flex items-center text-[#2D2200] shrink-0 font-bold text-[12px] tracking-[0.02em]">
+          <span>Learn. Wonder. Shine.</span>
         </div>
       </div>
     );
